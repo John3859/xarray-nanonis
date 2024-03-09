@@ -1,0 +1,25 @@
+[build-system]
+requires = [
+  "setuptools>=64",
+  "setuptools-scm>=8",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xarray-nanonis"
+authors=[
+    {name = "Hao Zhang", email = "zhanghao3859@hotmail.com"},
+]
+dynamic = ["version"]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "xarray",
+    "pandas",
+]
+
+[project.entry-points."xarray.backends"]
+nanonis = "xarray_nanonis.NanonisBackendEntrypoint:NanonisBackendEntrypoint"
+
+[tool.setuptools_scm]
