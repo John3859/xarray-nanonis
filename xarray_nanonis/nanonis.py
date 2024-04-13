@@ -29,6 +29,7 @@ from xarray_nanonis.utils import (
     _get_std_name,
     _parse_header_table,
     _separate_name_unit,
+    _handle_multilevel_header,
 )
 
 import numpy.typing as npt
@@ -130,7 +131,7 @@ class Read_NanonisFile:
         for line in file:
             if tag not in line:
                 # Decode line to text and save it into list.
-                header.append(line.decode(encoding="uft-8", errors="replace"))
+                header.append(line.decode(encoding="utf-8", errors="replace"))
             else:
                 # If tag is detected, stop iterating.
                 break
@@ -330,7 +331,8 @@ class Read_NanonisScanFile(Read_NanonisFile):
 
                 if count == 2:
                     # When count is 2, there is only a single line of value.
-                    header_dict[line] = header_raw[i + 1].strip()
+                    value = header_raw[i + 1].strip()
+                    _handle_multilevel_header(header_dict, line, value)
                 else:
                     # When There are multiple lines of values,
                     # the values are parsed as table.
@@ -581,7 +583,7 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
                 val: list[str] | str = val.strip('"').split(";")
             else:
                 val = val.strip('"')
-            header_dic[key] = val
+            _handle_multilevel_header(header_dic, key, val)
         return header_dic
 
     def _read_data(self, file: BinaryIO) -> npt.NDArray[np.double]:
@@ -856,7 +858,7 @@ class Read_NanonisASCIIFile(Read_NanonisFile):
                 line += "\t"
 
             key, val = line.split("\t")
-            header_dict[key] = val
+            _handle_multilevel_header(header_dict, key, val)
         self.header = header_dict
         return header_dict
 

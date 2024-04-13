@@ -131,3 +131,13 @@ def _separate_name_unit(channels: list[str]) -> tuple[list[str], dict[str, str]]
         names.append(channel_name)
         units[channel_name] = channel_unit
     return names, units
+
+
+def _handle_multilevel_header(header_dict, key, value):
+    if ">" in key:
+        level_0, level_1 = key.split(">", 1)
+        sub_dict = header_dict.setdefault(level_0, dict())
+        sub_dict[level_1] = value
+    else:
+        header_dict[key] = value
+    return header_dict
