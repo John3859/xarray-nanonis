@@ -12,9 +12,16 @@ import xarray as xr
 lockin_re = re.compile(r"LI[_ ]Demod[_ ][1, 2][_ ][X, Y].*")
 
 
-def _construct_var(dims, data, standard_name, units):
+def _construct_var(dims, data, standard_name, units, attrs=None):
+    if attrs is None:
+        attrs = {"standard_name": standard_name, "units": units}
+    else:
+        attrs["standard_name"] = standard_name
+        attrs["units"] = units
     coord = xr.Variable(
-        dims, data, attrs={"standard_name": standard_name, "units": units}
+        dims,
+        data,
+        attrs=attrs,
     )
     return coord
 

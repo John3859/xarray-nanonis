@@ -249,14 +249,54 @@ class Read_NanonisScanFile(Read_NanonisFile):
         return np.asarray(self.header["SCAN_PIXELS"].split(), dtype=np.short)
 
     @property
-    def range(self) -> npt.NDArray[np.double]:
+    def ranges(self) -> npt.NDArray[np.double]:
         """
         Scan range along x-axis and y-axis.
         Returns
         -------
         numpy.ndarray[Any, dtype[np.double]]
         """
-        return np.asarray(self.header["SCAN_RANGE"].split(), dtype=np.double)
+        return np.array(self.header["SCAN_RANGE"].split(), dtype=np.double)
+
+    @property
+    def range(self) -> npt.NDArray[np.double]:
+        """
+        Same as ranges.
+        Returns
+        -------
+        numpy.ndarray[Any, dtype[np.double]]
+        """
+        return self.ranges
+
+    @property
+    def center(self):
+        """
+        Absolulte location of the scan field.
+        Returns
+        -------
+        numpy.ndarray[Any, dtype[np.double]]
+        """
+        return np.array(self.header["SCAN_OFFSET"].split(), dtype=np.double)
+
+    @property
+    def angle(self):
+        """
+        Rotation angle of the image.
+        Returns
+        -------
+        float
+        """
+        return float(self.header["SCAN_ANGLE"])
+
+    @property
+    def corner(self):
+        """
+        Left-bottom of the scan field.
+        Returns
+        -------
+        numpy.ndarray[Any, dtype[np.double]]
+        """
+        return self.center - self.ranges / 2
 
     @property
     def channels(self) -> list[str]:
@@ -297,7 +337,7 @@ class Read_NanonisScanFile(Read_NanonisFile):
         """
         return float(self.header["BIAS"])
 
-    def _parse_header(self, header_raw: list[str]) -> dict[str, Any]:
+    def _parse_header(self, header_raw: list[str]) -> dict[str, str | dict[str, str]]:
         """
         Parse the header of scan file.
 
@@ -312,7 +352,7 @@ class Read_NanonisScanFile(Read_NanonisFile):
         """
         # Remove the empty line at the end.
         header_raw: list[str] = header_raw[:-1]
-        header_dict: dict[str, Any] = dict()
+        header_dict: dict[str, str | list[str] | dict[str, str]] = dict()
 
         # Convert header to dictionary.
         for i, line in enumerate(header_raw):
@@ -447,6 +487,15 @@ class Read_NanonisScanFile(Read_NanonisFile):
         # Split scan data from different channels,
         # and convert them to xarray.Variable
         # All the variables are saved into a dictionary.
+        shared_attrs = {
+            "pixels": (n_x, n_y),
+            "ranges": (range_x, range_y),
+            "steps": (range_x / (n_x - 1), range_y / (n_y - 1)),
+            "bias": self.bias,
+            "center": self.center,
+            "corner": self.corner,
+            "angle": self.angle,
+        }
         data_var: dict[str, xr.Variable] = dict()
         for i, chan in enumerate(chan_name):
             data_var[chan] = _construct_var(
@@ -454,20 +503,14 @@ class Read_NanonisScanFile(Read_NanonisFile):
                 data[i],
                 _get_std_name(chan),
                 self.units[chan],
+                attrs=shared_attrs,
             )
 
         # Store the data into xarray.DataSet
         data_ds = xr.Dataset(
             data_var,
             coords=coords_var,
-            attrs={
-                "pixels": (n_x, n_y),
-                "ranges": (range_x, range_y),
-                "steps": (range_x / (n_x - 1), range_y / (n_y - 1)),
-                "bias": self.bias,
-                "channels": chan_name,
-                "header": self.header,
-            },
+            attrs=self.header,
         )
         return data_ds
 
@@ -511,6 +554,16 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
         return n_x, n_y
 
     @property
+    def grid_setting(self) -> tuple[float, ...]:
+        """
+        Grid Setting.
+        Returns
+        -------
+        numpy.ndarray[Any, dtype[numpy.double]]
+        """
+        return tuple(np.array(self.header["Grid settings"], dtype=np.double))
+
+    @property
     def wh(self) -> tuple[float, float]:
         """
         Width and height of the grid.
@@ -518,8 +571,41 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
         -------
         tuple[float, float]
         """
-        width, height = np.asarray(self.header["Grid settings"], dtype=np.double)[2:4]
-        return width, height
+        w, h = self.grid_setting[2:4]
+        return w, h
+
+    @property
+    def center(self) -> tuple[float, float]:
+        """
+        Center of the grid.
+        Returns
+        -------
+        tuple[float, float]
+        """
+        cx, cy = self.grid_setting[:2]
+        return cx, cy
+
+    @property
+    def corner(self) -> tuple[float, float]:
+        """
+        Left-bottom corner of the grid.
+        Returns
+        -------
+        tuple[float, float]
+        """
+        cx, cy = self.center
+        w, h = self.wh
+        return cx - w / 2, cy - h / 2
+
+    @property
+    def angle(self) -> float:
+        """
+        Rotation angle of the grid.
+        Returns
+        -------
+        float
+        """
+        return self.grid_setting[-1]
 
     @property
     def steps(self) -> tuple[float, float]:
@@ -531,10 +617,12 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
         """
         w, h = self.wh
         n_x, n_y = self.pixels
-        try:
-            return w / (n_x - 1), h / (n_y - 1)
-        except ZeroDivisionError:
-            return w / (n_x - 1), 0
+        step_x = w / (n_x - 1)
+        if n_y != 1:
+            step_y = h / (n_y - 1)
+        else:
+            step_y = 0
+        return step_x, step_y
 
     @property
     def bias_range(self) -> tuple[float, float]:
@@ -544,11 +632,11 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
         -------
         tuple[float, float]
         """
-        bias_start = float(self.header["Bias Spectroscopy>Sweep Start (V)"])
-        bias_end = float(self.header["Bias Spectroscopy>Sweep End (V)"])
+        bias_start = float(self.header["Bias Spectroscopy"]["Sweep Start (V)"])
+        bias_end = float(self.header["Bias Spectroscopy"]["Sweep End (V)"])
         return bias_start, bias_end
 
-    def _parse_header(self, header_raw) -> dict[str, str | list[str]]:
+    def _parse_header(self, header_raw) -> dict[str, str | list[str] | dict[str, str]]:
         """
         Parse key-value pairs in grid file header.
 
@@ -571,7 +659,7 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
             Key-value pairs from header.
         """
         # The dictionary to store key-value pairs from header.
-        header_dic: dict[str, str | list[str]] = dict()
+        header_dic: dict[str, str | list[str] | dict[str, str]] = dict()
 
         for line in header_raw:
             # Each line in header is ended with "\r\n".
@@ -733,6 +821,16 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
         # and store them into a dictionary.
         chan_name, chan_units = _separate_name_unit(self.header["Channels"])
         data_var: dict[str, xr.Variable] = dict()
+        shared_attrs = {
+            "pixels": (n_x, n_y),
+            "points": n_point,
+            "ranges": (width, height),
+            "steps": (x_step, y_step),
+            "bias_range": (bias_start, bias_end),
+            "center": self.center,
+            "angle": self.angle,
+            "corner": self.corner,
+        }
         for i, chan in enumerate(chan_name):
             std_name = _get_std_name(chan)
             if back_status:
@@ -743,12 +841,14 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
                     data_array[slice(i * n_point, (i + 1) * n_point), :, :],
                     std_name,
                     chan_units[chan],
+                    attrs=shared_attrs,
                 )
                 data_var[chan + "_bwd"] = _construct_var(
                     ["bias", "y", "x"],
                     data_array[slice((i + 1) * n_point, (i + 2) * n_point), :, :],
                     std_name + "_bwd",
                     chan_units[chan + "_bwd"],
+                    attrs=shared_attrs,
                 )
             else:
                 # If backward sweep is off, only forward signals are stored
@@ -757,21 +857,14 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
                     data_array[slice(i * n_point, (i + 1) * n_point), :, :],
                     std_name,
                     chan_units[chan],
+                    attrs=shared_attrs,
                 )
 
         # Store into Dataset
         data_ds: xr.Dataset = xr.Dataset(
             data_var,
             coords=para_var,
-            attrs={
-                "channels": chan_name,
-                "pixels": (n_x, n_y),
-                "points": n_point,
-                "ranges": (width, height),
-                "steps": (x_step, y_step),
-                "bias_range": (bias_start, bias_end),
-                "header": self.header,
-            },
+            attrs=self.header,
         )
 
         # Line-cut only have 1 pixel along y direction,
@@ -793,7 +886,7 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
         """
         # Convert back sweep status into bool.
         try:
-            back_status: str = self.header["Bias Spectroscopy>backward sweep"]
+            back_status: str = self.header["Bias Spectroscopy"]["backward sweep"]
         except KeyError:
             # If backward sweep status is not saved in file,
             # decide the backward status using experiment size.
@@ -823,7 +916,31 @@ class Read_NanonisASCIIFile(Read_NanonisFile):
     def __init__(self, file_path: str | Path) -> None:
         super().__init__(file_path)
 
-    def _parse_header(self, header: list[str]) -> dict[str, str]:
+    @property
+    def bias_range(self) -> tuple[float, float]:
+        """
+        Start and end value of the bias sweep.
+        Returns
+        -------
+        tuple[float, float]
+        """
+        bias_start = float(self.header["Bias Spectroscopy"]["Sweep Start (V)"])
+        bias_end = float(self.header["Bias Spectroscopy"]["Sweep End (V)"])
+        return bias_start, bias_end
+
+    @property
+    def center(self) -> tuple[float, float]:
+        """
+        The absolute location of the bias sweep.
+        Returns
+        -------
+        tuple[float, float]
+        """
+        loc_x = float(self.header["X (m)"])
+        loc_y = float(self.header["Y (m)"])
+        return loc_x, loc_y
+
+    def _parse_header(self, header: list[str]) -> dict[str, str | dict[str, str]]:
         """
         Parse the raw header of spectroscopy.
 
@@ -845,7 +962,7 @@ class Read_NanonisASCIIFile(Read_NanonisFile):
 
         # Load the raw header from file and split it into lists of lines.
         header_raw: list[str] = header[:-1]
-        header_dict: dict[str, str] = dict()
+        header_dict: dict[str, str | dict[str, str]] = dict()
 
         # pretreatment of header entries.
         for line in header_raw:
@@ -921,8 +1038,15 @@ class Read_NanonisASCIIFile(Read_NanonisFile):
             standard_name=_get_std_name("bias"),
             units="V",
         )
+        # bias range
+        try:
+            bias_start, bias_end = self.bias_range
+        except KeyError:
+            bias_start = bias[0]
+            bias_end = bias[-1]
 
         # Dictionary that maps channel names to experimental data.
+        shared_attrs = {"bias_range": (bias_start, bias_end), "center": self.center}
         split_signal = dict()
         for chan, name in zip(_channels, names):
             split_signal[name] = _construct_var(
@@ -930,11 +1054,10 @@ class Read_NanonisASCIIFile(Read_NanonisFile):
                 data[chan],
                 standard_name=_get_std_name(name),
                 units=units[name],
+                attrs=shared_attrs,
             )
 
         # Save spectroscopic data into Xarray.Dataset.
-        data_ds = xr.Dataset(
-            split_signal, coords={"bias": bias}, attrs={"header": self.header}
-        )
+        data_ds = xr.Dataset(split_signal, coords={"bias": bias}, attrs=self.header)
         self.dataset = data_ds
         return data_ds
