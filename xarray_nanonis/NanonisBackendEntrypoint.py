@@ -16,12 +16,7 @@ class NanonisBackendEntrypoint(BackendEntrypoint):
             raise KeyError(
                 "{} keyword arguments are not supported".format(kwargs.keys())
             )
-        ds = Read_NanonisFile(filename_or_obj).dataset
-        if divider != 1:
-            try:
-                ds["bias"] = ds["bias"] / divider
-            except KeyError:
-                pass
+        ds = Read_NanonisFile(filename_or_obj, divider=divider).dataset
         return ds
 
     open_dataset_parameters = ["filename_or_obj", "drop_variables"]

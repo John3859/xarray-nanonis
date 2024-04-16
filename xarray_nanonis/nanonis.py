@@ -63,7 +63,7 @@ class Read_NanonisFile:
         - Read_NanonisASCIIFile, for reading .dat file.
     """
 
-    def __new__(cls, file_path: str):
+    def __new__(cls, file_path: str, divider: int = 1):
         """
         Use corresponding subclass according to the file extension.
 
@@ -82,7 +82,7 @@ class Read_NanonisFile:
                 cls = Read_NanonisASCIIFile
         return object.__new__(cls)
 
-    def __init__(self, file_path: str) -> None:
+    def __init__(self, file_path: str, divider: int = 1) -> None:
         """
         Read Nanonis file.
 
@@ -101,6 +101,8 @@ class Read_NanonisFile:
         # Path and suffix of the file.
         self.path: Path = Path(file_path)
         self.suffix: str = self.path.suffix
+        # divider
+        self.divider: int = divider
         # check is the file exits.
         if not self.path.exists():
             raise FileNotFoundError("Nanonis file {} does not exist".format(self.path))
@@ -233,9 +235,9 @@ class Read_NanonisScanFile(Read_NanonisFile):
     Read Nanonis scan file (.sxm).
     """
 
-    def __init__(self, file_path: str) -> None:
+    def __init__(self, file_path: str, divider: int = 1) -> None:
         self.data_format: str = ">f4"
-        super().__init__(file_path)
+        super().__init__(file_path, divider=divider)
 
     @property
     def pixels(self) -> npt.NDArray[np.short]:
@@ -335,7 +337,7 @@ class Read_NanonisScanFile(Read_NanonisFile):
         -------
         float
         """
-        return float(self.header["BIAS"])
+        return float(self.header["BIAS"]) / self.divider
 
     def _parse_header(self, header_raw: list[str]) -> dict[str, str | dict[str, str]]:
         """
@@ -520,7 +522,7 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
     Read Nanonis binary file (.3ds).
     """
 
-    def __init__(self, file_path: str):
+    def __init__(self, file_path: str, divider: int = 1):
         """
         Read Nanonis grid file.
         Parameters
@@ -529,7 +531,7 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
             File path of the file.
         """
         self._data_format: str = ">f4"
-        super().__init__(file_path)
+        super().__init__(file_path, divider=divider)
 
     @property
     def points(self) -> int:
@@ -632,8 +634,12 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
         -------
         tuple[float, float]
         """
-        bias_start = float(self.header["Bias Spectroscopy"]["Sweep Start (V)"])
-        bias_end = float(self.header["Bias Spectroscopy"]["Sweep End (V)"])
+        bias_start = (
+            float(self.header["Bias Spectroscopy"]["Sweep Start (V)"]) / self.divider
+        )
+        bias_end = (
+            float(self.header["Bias Spectroscopy"]["Sweep End (V)"]) / self.divider
+        )
         return bias_start, bias_end
 
     def _parse_header(self, header_raw) -> dict[str, str | list[str] | dict[str, str]]:
@@ -806,8 +812,13 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
             bias_start, bias_end = self.bias_range
         # If This information is not stored in header, get them from parameters.
         except KeyError:
-            bias_start = para_var["Sweep_Start"][0, 0]
-            bias_end = para_var["Sweep_End"][0, 0]
+            bias_start = para_var["Sweep_Start"][0, 0] / self.divider
+            bias_end = para_var["Sweep_End"][0, 0] / self.divider
+        # Reverse the bias dimension if initial bias voltage is larger.
+        bias_reverse = False
+        if bias_start > bias_end:
+            bias_reverse = True
+            bias_start, bias_end = bias_end, bias_start
         para_var["bias"] = _construct_var(
             "bias",
             np.linspace(bias_start, bias_end, n_point),
@@ -836,25 +847,41 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
             if back_status:
                 # If backward sweep is on, backward signals are also stored.
                 i *= 2
+                if bias_reverse:
+                    if i == 0:
+                        fwd_slice = slice((i + 1) * n_point - 1, None, -1)
+                    else:
+                        fwd_slice = slice((i + 1) * n_point - 1, i * n_point - 1, -1)
+                    bwd_slice = slice((i + 2) * n_point - 1, (i + 1) * n_point - 1, -1)
+                else:
+                    fwd_slice = slice(i * n_point, (i + 1) * n_point)
+                    bwd_slice = slice((i + 1) * n_point, (i + 2) * n_point)
                 data_var[chan] = _construct_var(
                     ["bias", "y", "x"],
-                    data_array[slice(i * n_point, (i + 1) * n_point), :, :],
+                    data_array[fwd_slice, :, :],
                     std_name,
                     chan_units[chan],
                     attrs=shared_attrs,
                 )
                 data_var[chan + "_bwd"] = _construct_var(
                     ["bias", "y", "x"],
-                    data_array[slice((i + 1) * n_point, (i + 2) * n_point), :, :],
+                    data_array[bwd_slice, :, :],
                     std_name + "_bwd",
                     chan_units[chan + "_bwd"],
                     attrs=shared_attrs,
                 )
             else:
                 # If backward sweep is off, only forward signals are stored
+                if bias_reverse:
+                    if i == 0:
+                        fwd_slice = slice((i + 1) * n_point - 1, None, -1)
+                    else:
+                        fwd_slice = slice((i + 1) * n_point - 1, i * n_point - 1, -1)
+                else:
+                    fwd_slice = slice(i * n_point, (i + 1) * n_point)
                 data_var[chan] = _construct_var(
                     ["bias", "y", "x"],
-                    data_array[slice(i * n_point, (i + 1) * n_point), :, :],
+                    data_array[fwd_slice, :, :],
                     std_name,
                     chan_units[chan],
                     attrs=shared_attrs,
@@ -913,8 +940,8 @@ class Read_NanonisASCIIFile(Read_NanonisFile):
     Read Nanonis ASCII file (.dat).
     """
 
-    def __init__(self, file_path: str | Path) -> None:
-        super().__init__(file_path)
+    def __init__(self, file_path: str | Path, divider: int = 1) -> None:
+        super().__init__(file_path, divider=divider)
 
     @property
     def bias_range(self) -> tuple[float, float]:
@@ -924,8 +951,12 @@ class Read_NanonisASCIIFile(Read_NanonisFile):
         -------
         tuple[float, float]
         """
-        bias_start = float(self.header["Bias Spectroscopy"]["Sweep Start (V)"])
-        bias_end = float(self.header["Bias Spectroscopy"]["Sweep End (V)"])
+        bias_start = (
+            float(self.header["Bias Spectroscopy"]["Sweep Start (V)"]) / self.divider
+        )
+        bias_end = (
+            float(self.header["Bias Spectroscopy"]["Sweep End (V)"]) / self.divider
+        )
         return bias_start, bias_end
 
     @property
@@ -1032,15 +1063,20 @@ class Read_NanonisASCIIFile(Read_NanonisFile):
         names, units = _separate_name_unit(_channels)
 
         # Sample bias index.
-        bias = _construct_var(
-            "bias",
-            data.index,
-            standard_name=_get_std_name("bias"),
-            units="V",
+        bias = (
+            _construct_var(
+                "bias",
+                data.index,
+                standard_name=_get_std_name("bias"),
+                units="V",
+            )
+            / self.divider
         )
         # bias range
         try:
             bias_start, bias_end = self.bias_range
+            if bias_start > bias_end:
+                bias_start, bias_end = bias_end, bias_start
         except KeyError:
             bias_start = bias[0]
             bias_end = bias[-1]
