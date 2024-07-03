@@ -428,7 +428,12 @@ class Read_NanonisScanFile(Read_NanonisFile):
         # Number of scan pixels
         n_x, n_y = self.pixels
         # Reshape the array according to the order the data is stored.
-        data = data_raw.reshape(n_channel, n_direction, n_y, n_x)
+        try:
+            data = data_raw.reshape(n_channel, n_direction, n_y, n_x)
+        except ValueError:
+            data = np.empty((n_channel, n_direction, n_y, n_x), dtype=np.double)
+            data[:, 0, :, :] = data_raw.reshape(n_channel, 1, n_y, n_x)
+            data[:, 1, :, :] = data[:, 0, :, :]
         # Reorder the array so that up-scan, down-scan, forward-scan and backward-scan
         # all have the lower left corner of the scanfield
         if self.header["SCAN_DIR"] == "down":
