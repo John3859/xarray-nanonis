@@ -16,9 +16,13 @@ __all__: list[str] = [
     "Read_NanonisASCIIFile",
 ]
 
+import numpy
+
+segment_entry = "Segment Start (V), Segment End (V), Settling (s), Integration (s), Steps (xn), Lockin, Init. Settling (s)"
+
 import os
 from pathlib import Path
-from typing import Any, BinaryIO, TYPE_CHECKING
+from typing import Any, BinaryIO, TYPE_CHECKING, Literal
 
 import numpy as np
 import pandas as pd
@@ -647,6 +651,10 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
         )
         return bias_start, bias_end
 
+    @property
+    def filetype(self) -> Literal["Linear", "MLS"]:
+        return self.header.get("Filetype", "Linear")
+
     def _parse_header(self, header_raw) -> dict[str, str | list[str] | dict[str, str]]:
         """
         Parse key-value pairs in grid file header.
@@ -812,25 +820,53 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
         para_var["y"] = _construct_var(
             "y", np.linspace(0, height, n_y), _get_std_name("y"), "m"
         )
-        # Get the start and end value of bias sweep.
-        try:
-            bias_start, bias_end = self.bias_range
-        # If This information is not stored in header, get them from parameters.
-        except KeyError:
-            bias_start = para_var["Sweep_Start"][0, 0] / self.divider
-            bias_end = para_var["Sweep_End"][0, 0] / self.divider
-        # Reverse the bias dimension if initial bias voltage is larger.
-        bias_reverse = False
-        if bias_start > bias_end:
-            bias_reverse = True
-            bias_start, bias_end = bias_end, bias_start
-        para_var["bias"] = _construct_var(
-            "bias",
-            np.linspace(bias_start, bias_end, n_point),
-            _get_std_name("bias"),
-            "V",
-        )
-
+        if self.filetype == "Linear":
+            # Common linear bias spectroscopy
+            # Get the start and end value of bias sweep.
+            try:
+                bias_start, bias_end = self.bias_range
+            # If This information is not stored in header, get them from parameters.
+            except KeyError:
+                bias_start = para_var["Sweep_Start"][0, 0] / self.divider
+                bias_end = para_var["Sweep_End"][0, 0] / self.divider
+            # Reverse the bias dimension if initial bias voltage is larger.
+            bias_reverse = False
+            if bias_start > bias_end:
+                bias_reverse = True
+                bias_start, bias_end = bias_end, bias_start
+            para_var["bias"] = _construct_var(
+                "bias",
+                np.linspace(bias_start, bias_end, n_point),
+                _get_std_name("bias"),
+                "V",
+            )
+        elif self.filetype == "MLS":
+            # Handle multilinear segment bias spectroscopy
+            # Reserve the original
+            bias_reverse = False
+            bias_sweep: npt.NDArray[np.double] = np.array([], dtype=np.double)
+            multi_segment_parameters = self.header[segment_entry]
+            previous_segment_end: float | None = None
+            for segment in multi_segment_parameters:
+                segment = segment.split(",")
+                segment_start = float(segment[0])
+                segment_end = float(segment[1])
+                segment_points = int(segment[4])
+                bias_segment = np.linspace(segment_start, segment_end, segment_points)
+                if previous_segment_end == segment_start:
+                    bias_segment = bias_segment[1:]
+                bias_sweep = np.append(bias_sweep, bias_segment)
+                previous_segment_end = segment_end
+            para_var["bias"] = _construct_var(
+                "bias",
+                bias_sweep,
+                _get_std_name("bias"),
+                "V",
+            )
+            bias_start = bias_sweep[0]
+            bias_end = bias_sweep[-1]
+        else:
+            raise ValueError("Unknown file type {}!".format(self.filetype))
         # Separate signals from parameters in raw data.
         data_array: npt.NDArray[np.double] = data[n_para:, :, :]
         # Split signals from different channels apart,
