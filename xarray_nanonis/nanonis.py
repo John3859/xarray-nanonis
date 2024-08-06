@@ -928,6 +928,12 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
                     attrs=shared_attrs,
                 )
 
+        # rename channel "X" into "X_data"
+        for reapeat_key in ["X", "Y", "Z"]:
+            try:
+                data_var[reapeat_key + "_data"] = data_var.pop(reapeat_key)
+            except KeyError:
+                pass
         # Store into Dataset
         data_ds: xr.Dataset = xr.Dataset(
             data_var,
