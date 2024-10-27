@@ -752,7 +752,13 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
 
         # Reshape raw data into 3D array.
         # axis in order ['y', 'x', 'parameter + channel'].
-        data = data.reshape(n_y, n_x, exp_size)
+        try:
+            data = data.reshape(n_y, n_x, exp_size)
+        except ValueError:
+            pad_size = exp_size * n_x * n_y - len(data)
+            data = np.pad(data, (0, pad_size), mode="empty")
+            data = data.reshape(n_y, n_x, exp_size)
+
         # Move axis so that the order of the axis is ['param + channel', 'y', 'x']
         data = np.moveaxis(data, 2, 0)
         return data
