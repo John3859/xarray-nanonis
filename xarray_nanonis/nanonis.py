@@ -972,15 +972,16 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
             # decide the backward status using experiment size.
             exp_size = int(self.header["Experiment size (bytes)"])
             n_point: int = self.points
+            n_channel: int = len(self.header["Channels"])
             # The experimental size when backward sweep is enabled.
             # Each floating point number uses 4 bytes.
             # When acquiring 1 channel forward and backward, 256 points,
             # this will be 2 x 256 x 4 bytes = 2048 bytes.
-            exp_size_bwd: int = 8 * n_point
+            exp_size_bwd: int = 4 * n_channel * n_point
             if exp_size == exp_size_bwd:
-                return True
-            else:
                 return False
+            else:
+                return True
 
         if back_status == "FALSE":
             return False
