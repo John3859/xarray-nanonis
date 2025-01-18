@@ -244,15 +244,15 @@ class Read_NanonisScanFile(Read_NanonisFile):
         super().__init__(file_path, divider=divider)
 
     @property
-    def pixels(self) -> npt.NDArray[np.short]:
+    def pixels(self) -> npt.NDArray[np.long]:
         """
         Pixels along x-axis and y-axis.
 
         Returns
         -------
-        numpy.ndarray[Any, dtype[np.short]]
+        numpy.ndarray[Any, dtype[np.long]]
         """
-        return np.asarray(self.header["SCAN_PIXELS"].split(), dtype=np.short)
+        return np.asarray(self.header["SCAN_PIXELS"].split(), dtype=np.long)
 
     @property
     def ranges(self) -> npt.NDArray[np.double]:
@@ -561,7 +561,7 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
         -------
         tuple[int, int]
         """
-        n_x, n_y = np.asarray(self.header["Grid dim"].split("x"), dtype=np.short)
+        n_x, n_y = np.asarray(self.header["Grid dim"].split("x"), dtype=np.long)
         return n_x, n_y
 
     @property
@@ -842,7 +842,7 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
                 bias_start, bias_end = bias_end, bias_start
             para_var["bias"] = _construct_var(
                 "bias",
-                np.linspace(bias_start, bias_end, n_point),
+                np.linspace(bias_start.item(), bias_end.item(), n_point),
                 _get_std_name("bias"),
                 "V",
             )
