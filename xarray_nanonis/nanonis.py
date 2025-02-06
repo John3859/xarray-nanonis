@@ -833,8 +833,8 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
                 bias_start, bias_end = self.bias_range
             # If This information is not stored in header, get them from parameters.
             except KeyError:
-                bias_start = para_var["Sweep_Start"][0, 0] / self.divider
-                bias_end = para_var["Sweep_End"][0, 0] / self.divider
+                bias_start = para_var["Sweep_Start"][0, 0].item() / self.divider
+                bias_end = para_var["Sweep_End"][0, 0].item() / self.divider
             # Reverse the bias dimension if initial bias voltage is larger.
             bias_reverse = False
             if bias_start > bias_end:
@@ -842,7 +842,7 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
                 bias_start, bias_end = bias_end, bias_start
             para_var["bias"] = _construct_var(
                 "bias",
-                np.linspace(bias_start.item(), bias_end.item(), n_point),
+                np.linspace(bias_start, bias_end, n_point),
                 _get_std_name("bias"),
                 "V",
             )
