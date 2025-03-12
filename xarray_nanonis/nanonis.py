@@ -498,15 +498,15 @@ class Read_NanonisScanFile(Read_NanonisFile):
         # Split scan data from different channels,
         # and convert them to xarray.Variable
         # All the variables are saved into a dictionary.
-        shared_attrs = {
-            "pixels": (n_x, n_y),
-            "ranges": (range_x, range_y),
-            "steps": (range_x / (n_x - 1), range_y / (n_y - 1)),
-            "bias": self.bias,
-            "center": self.center,
-            "corner": self.corner,
-            "angle": self.angle,
-        }
+        # shared_attrs = {
+        #     "pixels": (n_x, n_y),
+        #     "ranges": (range_x, range_y),
+        #     "steps": (range_x / (n_x - 1), range_y / (n_y - 1)),
+        #     "bias": self.bias,
+        #     "center": self.center,
+        #     "corner": self.corner,
+        #     "angle": self.angle,
+        # }
         data_var: dict[str, xr.Variable] = dict()
         for i, chan in enumerate(chan_name):
             data_var[chan] = _construct_var(
@@ -514,7 +514,7 @@ class Read_NanonisScanFile(Read_NanonisFile):
                 data[i],
                 _get_std_name(chan),
                 self.units[chan],
-                attrs=shared_attrs,
+                attrs=self.header,
             )
 
         # Store the data into xarray.DataSet
@@ -879,16 +879,16 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
         # and store them into a dictionary.
         chan_name, chan_units = _separate_name_unit(self.header["Channels"])
         data_var: dict[str, xr.Variable] = dict()
-        shared_attrs = {
-            "pixels": (n_x, n_y),
-            "points": n_point,
-            "ranges": (width, height),
-            "steps": (x_step, y_step),
-            "bias_range": (bias_start, bias_end),
-            "center": self.center,
-            "angle": self.angle,
-            "corner": self.corner,
-        }
+        # shared_attrs = {
+        #     "pixels": (n_x, n_y),
+        #     "points": n_point,
+        #     "ranges": (width, height),
+        #     "steps": (x_step, y_step),
+        #     "bias_range": (bias_start, bias_end),
+        #     "center": self.center,
+        #     "angle": self.angle,
+        #     "corner": self.corner,
+        # }
         for i, chan in enumerate(chan_name):
             std_name = _get_std_name(chan)
             if back_status:
@@ -908,14 +908,14 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
                     data_array[fwd_slice, :, :],
                     std_name,
                     chan_units[chan],
-                    attrs=shared_attrs,
+                    attrs=self.header,
                 )
                 data_var[chan + "_bwd"] = _construct_var(
                     ["bias", "y", "x"],
                     data_array[bwd_slice, :, :],
                     std_name + "_bwd",
                     chan_units[chan + "_bwd"],
-                    attrs=shared_attrs,
+                    attrs=self.header,
                 )
             else:
                 # If backward sweep is off, only forward signals are stored
@@ -931,7 +931,7 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
                     data_array[fwd_slice, :, :],
                     std_name,
                     chan_units[chan],
-                    attrs=shared_attrs,
+                    attrs=self.header,
                 )
 
         # rename channel "X" into "X_data"
@@ -1136,7 +1136,7 @@ class Read_NanonisASCIIFile(Read_NanonisFile):
             bias_end = bias[-1]
 
         # Dictionary that maps channel names to experimental data.
-        shared_attrs = {"bias_range": (bias_start, bias_end), "center": self.center}
+        # shared_attrs = {"bias_range": (bias_start, bias_end), "center": self.center}
         split_signal = dict()
         for chan, name in zip(_channels, names):
             split_signal[name] = _construct_var(
@@ -1144,7 +1144,7 @@ class Read_NanonisASCIIFile(Read_NanonisFile):
                 data[chan],
                 standard_name=_get_std_name(name),
                 units=units[name],
-                attrs=shared_attrs,
+                attrs=self.header,
             )
 
         # Save spectroscopic data into Xarray.Dataset.

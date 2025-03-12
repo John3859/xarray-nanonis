@@ -23,3 +23,8 @@ dependencies = [
 nanonis = "xarray_nanonis.NanonisBackendEntrypoint:NanonisBackendEntrypoint"
 
 [tool.setuptools_scm]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9.10",
+]
