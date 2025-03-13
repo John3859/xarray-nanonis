@@ -9,6 +9,23 @@ There are three kinds of Nanonis data file:
 These file formats consist of ASCII header which is followed by experiment data.
 """
 
+import os
+from pathlib import Path
+from typing import Any, BinaryIO, Literal, cast
+
+import numpy as np
+import numpy.typing as npt
+import pandas as pd
+import xarray as xr
+
+from xarray_nanonis.utils import (
+    _construct_var,
+    _get_std_name,
+    _handle_multilevel_header,
+    _parse_header_table,
+    _separate_name_unit,
+)
+
 __all__: list[str] = [
     "Read_NanonisFile",
     "Read_NanonisScanFile",
@@ -16,31 +33,15 @@ __all__: list[str] = [
     "Read_NanonisASCIIFile",
 ]
 
-import numpy
 
-segment_entry = "Segment Start (V), Segment End (V), Settling (s), Integration (s), Steps (xn), Lockin, Init. Settling (s)"
-
-import os
-from pathlib import Path
-from typing import Any, BinaryIO, TYPE_CHECKING, Literal
-
-import numpy as np
-import pandas as pd
-import xarray as xr
-
-from xarray_nanonis.utils import (
-    _construct_var,
-    _get_std_name,
-    _parse_header_table,
-    _separate_name_unit,
-    _handle_multilevel_header,
+segment_entry = (
+    "Segment Start (V), Segment End (V), Settling (s), Integration (s), Steps (xn), Lockin, Init. Settling (s)"
 )
 
-import numpy.typing as npt
 
-if TYPE_CHECKING:
-    from numpy.typing import NDArray
-    from xarray import Dataset
+# if TYPE_CHECKING:
+#     from numpy.typing import NDArray
+#     from xarray import Dataset
 
 # End tag of header for different Nanonis file formats.
 nanonis_end_tags = {".3ds": ":HEADER_END:", ".sxm": "SCANIT_END", ".dat": "[DATA]"}
@@ -67,13 +68,13 @@ class Read_NanonisFile:
         - Read_NanonisASCIIFile, for reading .dat file.
     """
 
-    def __new__(cls, file_path: str, divider: int = 1):
+    def __new__(cls, file_path: str | Path, divider: int = 1):
         """
         Use corresponding subclass according to the file extension.
 
         Parameters
         ----------
-        file_path: str
+        file_path: str | Path
             Path of the Nanonis file.
         """
         if cls is Read_NanonisFile:
@@ -86,7 +87,7 @@ class Read_NanonisFile:
                 cls = Read_NanonisASCIIFile
         return object.__new__(cls)
 
-    def __init__(self, file_path: str, divider: int = 1) -> None:
+    def __init__(self, file_path: str | Path, divider: int = 1) -> None:
         """
         Read Nanonis file.
 
@@ -98,7 +99,7 @@ class Read_NanonisFile:
 
         Parameters
         ----------
-        file_path: str
+        file_path: str | Path
             Path of the Nanonis file.
         """
 
@@ -110,8 +111,8 @@ class Read_NanonisFile:
         # check is the file exits.
         if not self.path.exists():
             raise FileNotFoundError("Nanonis file {} does not exist".format(self.path))
-        self.header: dict[str, Any] | None = None
-        self.dataset: xr.Dataset | None = None
+        self.header: dict[str, Any] = {}
+        self.dataset: xr.Dataset = xr.Dataset()
         # Read the file and save the information into self.header and self.dataset.
         self._read_file()
 
@@ -175,9 +176,7 @@ class Read_NanonisFile:
         """
         raise NotImplementedError
 
-    def _organize_data(
-        self, data_raw: npt.NDArray[np.double] | pd.DataFrame
-    ) -> npt.NDArray[np.double] | pd.DataFrame:
+    def _organize_data(self, data_raw: Any) -> Any:
         """
         Organize the data to particular structure by either reshaping or sorting.
 
@@ -192,7 +191,7 @@ class Read_NanonisFile:
         """
         raise NotImplementedError
 
-    def _load_dataset(self, data: npt.NDArray[np.double] | pd.DataFrame) -> xr.Dataset:
+    def _load_dataset(self, data: Any) -> xr.Dataset:
         """
         Save both data and header into xarray.Dataset.
 
@@ -239,7 +238,7 @@ class Read_NanonisScanFile(Read_NanonisFile):
     Read Nanonis scan file (.sxm).
     """
 
-    def __init__(self, file_path: str, divider: int = 1) -> None:
+    def __init__(self, file_path: str | Path, divider: int = 1) -> None:
         self.data_format: str = ">f4"
         super().__init__(file_path, divider=divider)
 
@@ -357,8 +356,8 @@ class Read_NanonisScanFile(Read_NanonisFile):
         dict[str, Any]
         """
         # Remove the empty line at the end.
-        header_raw: list[str] = header_raw[:-1]
-        header_dict: dict[str, str | list[str] | dict[str, str]] = dict()
+        header_raw = header_raw[:-1]
+        header_dict: dict[str, str | dict[str, str]] = dict()
 
         # Convert header to dictionary.
         for i, line in enumerate(header_raw):
@@ -366,7 +365,7 @@ class Read_NanonisScanFile(Read_NanonisFile):
             # The header consists of tags surrounded by colons (':')
             # followed by one or more lines of values.
             if line.startswith(":"):
-                line: str = line.strip(":")
+                line = line.strip(":")
                 count = 1
 
                 # Count how many lines does each value have.
@@ -382,9 +381,7 @@ class Read_NanonisScanFile(Read_NanonisFile):
                 else:
                     # When There are multiple lines of values,
                     # the values are parsed as table.
-                    header_dict[line] = _parse_header_table(
-                        header_raw[i + 1 : i + count]
-                    )
+                    header_dict[line] = _parse_header_table(line, header_raw[i + 1 : i + count])
         return header_dict
 
     def _read_data(self, file: BinaryIO) -> npt.NDArray[np.double]:
@@ -405,7 +402,7 @@ class Read_NanonisScanFile(Read_NanonisFile):
         data: npt.NDArray[np.double] = np.fromfile(file, dtype=self.data_format)
         return data
 
-    def _organize_data(self, data_raw: npt.NDArray[np.double]):
+    def _organize_data(self, data_raw: npt.NDArray[np.double]) -> npt.NDArray[np.double]:
         """
         Reshape the data to multidimensional array.
 
@@ -437,7 +434,7 @@ class Read_NanonisScanFile(Read_NanonisFile):
         except ValueError:
             data = np.empty((n_channel, n_direction, n_y, n_x), dtype=np.double)
             data[:, 0, :, :] = data_raw.reshape(n_channel, 1, n_y, n_x)
-            data[:, 1, :, :] = data[:, 0, :, :]
+            data[:, 1, :, :] = np.ones_like(data[:, 0, :, :])
         # Reorder the array so that up-scan, down-scan, forward-scan and backward-scan
         # all have the lower left corner of the scanfield
         if self.header["SCAN_DIR"] == "down":
@@ -483,17 +480,11 @@ class Read_NanonisScanFile(Read_NanonisFile):
         # Coordinates of the Dataset
         coords_var = dict()
         # x-axis
-        coords_var["x"] = _construct_var(
-            "x", np.linspace(0, range_x, n_x), _get_std_name("x"), "m"
-        )
+        coords_var["x"] = _construct_var("x", np.linspace(0, range_x, n_x), _get_std_name("x"), "m")
         # y-axis
-        coords_var["y"] = _construct_var(
-            "y", np.linspace(0, range_y, n_y), _get_std_name("y"), "m"
-        )
+        coords_var["y"] = _construct_var("y", np.linspace(0, range_y, n_y), _get_std_name("y"), "m")
         # Scan directions
-        coords_var["dir"] = _construct_var(
-            "dir", ["forward", "backward"], _get_std_name("dir"), None
-        )
+        coords_var["dir"] = _construct_var("dir", ["forward", "backward"], _get_std_name("dir"), None)
 
         # Split scan data from different channels,
         # and convert them to xarray.Variable
@@ -531,12 +522,12 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
     Read Nanonis binary file (.3ds).
     """
 
-    def __init__(self, file_path: str, divider: int = 1):
+    def __init__(self, file_path: str | Path, divider: int = 1):
         """
         Read Nanonis grid file.
         Parameters
         ----------
-        file_path : str
+        file_path : str | Path
             File path of the file.
         """
         self._data_format: str = ">f4"
@@ -643,17 +634,23 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
         -------
         tuple[float, float]
         """
-        bias_start = (
-            float(self.header["Bias Spectroscopy"]["Sweep Start (V)"]) / self.divider
-        )
-        bias_end = (
-            float(self.header["Bias Spectroscopy"]["Sweep End (V)"]) / self.divider
-        )
+        bias_start = float(self.header["Bias Spectroscopy"]["Sweep Start (V)"]) / self.divider
+        bias_end = float(self.header["Bias Spectroscopy"]["Sweep End (V)"]) / self.divider
         return bias_start, bias_end
 
     @property
     def filetype(self) -> Literal["Linear", "MLS"]:
-        return self.header.get("Filetype", "Linear")
+        """
+        Get the file type of the Nanonis binary file.
+
+        The file type can be either "Linear" or "MLS" (Multi-Linear Segment).
+
+        Returns
+        -------
+        Literal["Linear", "MLS"]
+            The file type of the Nanonis binary file.
+        """
+        return cast(Literal["Linear", "MLS"], self.header.get("Filetype", "Linear"))
 
     def _parse_header(self, header_raw) -> dict[str, str | list[str] | dict[str, str]]:
         """
@@ -687,7 +684,7 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
             # Remove the '"' surrounding the values.
             # A series of values are seperated with ';'. Split them into tuple.
             if ";" in line:
-                val: list[str] | str = val.strip('"').split(";")
+                val = val.strip('"').split(";")
             else:
                 val = val.strip('"')
             _handle_multilevel_header(header_dic, key, val)
@@ -802,30 +799,20 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
 
         # Raw data contains both parameters and signals from different channels.
         # Separate these apart and store parameters into Dataset's coordinates.
-        exp_param_name, exp_param_units = _separate_name_unit(
-            self.header["Experiment parameters"]
-        )
-        fixed_param_name, fixed_param_units = _separate_name_unit(
-            self.header["Fixed parameters"]
-        )
+        exp_param_name, exp_param_units = _separate_name_unit(self.header["Experiment parameters"])
+        fixed_param_name, fixed_param_units = _separate_name_unit(self.header["Fixed parameters"])
         para_name: list[str] = fixed_param_name + exp_param_name
-        param_units: dict[str, str] = fixed_param_units | exp_param_units
+        param_units = fixed_param_units | exp_param_units
         para_array: npt.NDArray[np.double] = data[0:n_para, :, :]
 
         # Store parameters into a dictionary of Variable.
         para_var: dict[str, xr.Variable] = dict()
         for i, param in enumerate(para_name):
-            para_var[param] = _construct_var(
-                ["y", "x"], para_array[i, :, :], param, param_units[param]
-            )
+            para_var[param] = _construct_var(["y", "x"], para_array[i, :, :], param, param_units[param])
 
         # Generate axis 'x', 'y' and 'Bias'.
-        para_var["x"] = _construct_var(
-            "x", np.linspace(0, width, n_x), _get_std_name("x"), "m"
-        )
-        para_var["y"] = _construct_var(
-            "y", np.linspace(0, height, n_y), _get_std_name("y"), "m"
-        )
+        para_var["x"] = _construct_var("x", np.linspace(0, width, n_x), _get_std_name("x"), "m")
+        para_var["y"] = _construct_var("y", np.linspace(0, height, n_y), _get_std_name("y"), "m")
         if self.filetype == "Linear":
             # Common linear bias spectroscopy
             # Get the start and end value of bias sweep.
@@ -833,8 +820,8 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
                 bias_start, bias_end = self.bias_range
             # If This information is not stored in header, get them from parameters.
             except KeyError:
-                bias_start = para_var["Sweep_Start"][0, 0].item() / self.divider
-                bias_end = para_var["Sweep_End"][0, 0].item() / self.divider
+                bias_start = para_var["Sweep_Start"].values[0, 0] / self.divider
+                bias_end = para_var["Sweep_End"].values[0, 0] / self.divider
             # Reverse the bias dimension if initial bias voltage is larger.
             bias_reverse = False
             if bias_start > bias_end:
@@ -1005,12 +992,8 @@ class Read_NanonisASCIIFile(Read_NanonisFile):
         -------
         tuple[float, float]
         """
-        bias_start = (
-            float(self.header["Bias Spectroscopy"]["Sweep Start (V)"]) / self.divider
-        )
-        bias_end = (
-            float(self.header["Bias Spectroscopy"]["Sweep End (V)"]) / self.divider
-        )
+        bias_start = float(self.header["Bias Spectroscopy"]["Sweep Start (V)"]) / self.divider
+        bias_end = float(self.header["Bias Spectroscopy"]["Sweep End (V)"]) / self.divider
         return bias_start, bias_end
 
     @property
@@ -1054,7 +1037,7 @@ class Read_NanonisASCIIFile(Read_NanonisFile):
             line = line.rstrip("\r\n")
             if line[-1] == "\t":
                 # Delete \t at the end of values
-                line: str = line.rstrip("\t")
+                line = line.rstrip("\t")
             if "\t" not in line:
                 # Make sure every key is followed by \t
                 line += "\t"
@@ -1113,7 +1096,7 @@ class Read_NanonisASCIIFile(Read_NanonisFile):
         # Read channels' names from Nanonis file.
         # The names from the file contain both name and unit of each channel.
         # names and units of all the channels
-        _channels = data.columns.values
+        _channels = list(data.columns)
         names, units = _separate_name_unit(_channels)
 
         # Sample bias index.

@@ -3,9 +3,8 @@ utils
 """
 
 import re
-from typing import TYPE_CHECKING
+from typing import overload
 
-import numpy as np
 import xarray as xr
 
 # Regular expressions for channel names
@@ -26,7 +25,7 @@ def _construct_var(dims, data, standard_name, units, attrs=None):
     return coord
 
 
-def _parse_header_table(table_list):
+def _parse_header_table(name, table_list):
     """
     Parse table in header into dictionary.
 
@@ -39,15 +38,31 @@ def _parse_header_table(table_list):
     table_array = []
     # split each line in table_list to arraies.
     for entry in table_list:
-        entry = entry.strip("\t").split("\t")
+        entry = entry.strip("\t\n").split("\t")
         table_array.append(entry)
 
+    if name == "Multipass-Config":
+        # Process multipass table
+        return _parse_multipass_table(table_array)
+
+    return _parse_std_table(table_array)
+
+
+def _parse_std_table(table_array):
     table_header = table_array[0]
     table_values = zip(*table_array[1:])
-
     table_dict = dict(zip(table_header, table_values))
-
     return table_dict
+
+
+def _parse_multipass_table(table_array):
+    table_header = table_array[0]
+    multipass_dict = {}
+    for i, entry in enumerate(table_array[1:]):
+        i_div, i_mod = divmod(i, 2)
+        entry_name = f"fwd_{i_div}" if i_mod == 0 else f"bwd_{i_div}"
+        multipass_dict[entry_name] = dict(zip(table_header, entry))
+    return multipass_dict
 
 
 def _get_std_name(name: str) -> str:
@@ -77,7 +92,15 @@ def _get_std_name(name: str) -> str:
     return std_name
 
 
-def _name(name: str | list[str]) -> str:
+@overload
+def _name(name: str) -> str: ...
+
+
+@overload
+def _name(name: list[str]) -> list[str]: ...
+
+
+def _name(name):
     """
     Process the name to have consistent format
 
@@ -100,7 +123,7 @@ def _name(name: str | list[str]) -> str:
     return name
 
 
-def _separate_name_unit(channels: list[str]) -> tuple[list[str], dict[str, str]]:
+def _separate_name_unit(channels: list[str]) -> tuple[list[str], dict[str, str | None]]:
     """
     Separate the names and units of every channel.
 
@@ -116,12 +139,13 @@ def _separate_name_unit(channels: list[str]) -> tuple[list[str], dict[str, str]]
     channel_units : dict[str, str]
         Dictionary containing name and unit pairs of each channel.
     """
-    names: list[str] = []
-    units: dict[str, str] = {}
+    names = []
+    units = {}
     # regular expression matches unit.
     re_pattern = re.compile(r" \(.\)")
     for channel in channels:
-        if re_pattern.search(channel):
+        match = re_pattern.search(channel)
+        if match:
             # split the channel names by the match of unit.
             name_split = re_pattern.split(channel)
             # combine all the split strings to form the name of channel.
@@ -130,7 +154,7 @@ def _separate_name_unit(channels: list[str]) -> tuple[list[str], dict[str, str]]
                 channel_name += i
             channel_name = _name(channel_name)
             # search the unit of the channel
-            channel_unit = re_pattern.search(channel).group().strip("() ")
+            channel_unit = match.group().strip("() ")
         else:
             # If the channel does not contain unit, the unit is set to None.
             channel_name = _name(channel)

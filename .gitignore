@@ -135,19 +135,5 @@ dmypy.json
 .DS_Store
 *.icloud
 
-# Nanonis file
-*.3ds
-*.sxm
-
-# testdatas
-/testdata/
-
-# test files
-*.ipynb
-/testmapping.py
-*.html
-*.jpg
-test*.py
-.vscode/settings.json
-.mypy.ini
-/1216-peak.py
+# VSCode
+.vscode/

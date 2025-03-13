@@ -2,7 +2,7 @@
 Add nanonis backend to xarray
 """
 
-from . import nanonis, utils, NanonisBackendEntrypoint
+from . import NanonisBackendEntrypoint, nanonis, utils
 from .nanonis import *
 
 __all__ = ["nanonis", "utils", "NanonisBackendEntrypoint"]
