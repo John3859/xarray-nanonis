@@ -505,7 +505,7 @@ class Read_NanonisScanFile(Read_NanonisFile):
                 data[i],
                 _get_std_name(chan),
                 self.units[chan],
-                attrs=self.header,
+                # attrs=self.header,
             )
 
         # Store the data into xarray.DataSet
@@ -684,7 +684,7 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
             # Remove the '"' surrounding the values.
             # A series of values are seperated with ';'. Split them into tuple.
             if ";" in line:
-                val = val.strip('"').split(";")
+                val = tuple(val.strip('"').split(";"))
             else:
                 val = val.strip('"')
             _handle_multilevel_header(header_dic, key, val)
@@ -895,14 +895,14 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
                     data_array[fwd_slice, :, :],
                     std_name,
                     chan_units[chan],
-                    attrs=self.header,
+                    # attrs=self.header,
                 )
                 data_var[chan + "_bwd"] = _construct_var(
                     ["bias", "y", "x"],
                     data_array[bwd_slice, :, :],
                     std_name + "_bwd",
                     chan_units[chan + "_bwd"],
-                    attrs=self.header,
+                    # attrs=self.header,
                 )
             else:
                 # If backward sweep is off, only forward signals are stored
@@ -918,7 +918,7 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
                     data_array[fwd_slice, :, :],
                     std_name,
                     chan_units[chan],
-                    attrs=self.header,
+                    # attrs=self.header,
                 )
 
         # rename channel "X" into "X_data"

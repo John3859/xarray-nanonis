@@ -11,7 +11,8 @@ import xarray_nanonis
 
 @pytest.fixture(scope="class")
 def sxm_data(sxm_pixels):
-    return np.random.random(3 * 2 * sxm_pixels[0] * sxm_pixels[1]).astype(np.float32)
+    rng = np.random.default_rng()
+    return rng.random(3 * 2 * sxm_pixels[0] * sxm_pixels[1], dtype=np.float32)
 
 
 @pytest.fixture(scope="class")
@@ -144,12 +145,13 @@ class TestSxmFile:
         """
         Test the header attributes of the dataset.
         """
-        for key in sxm_header_dict.keys():
-            if isinstance(sxm_header_dict[key], dict):
-                for subkey in sxm_header_dict[key].keys():
-                    assert ds.attrs[key][subkey] == sxm_header_dict[key][subkey]
-            else:
-                assert ds.attrs[key] == sxm_header_dict[key]
+        assert ds.attrs == sxm_header_dict
+        # for key in sxm_header_dict.keys():
+        #     if isinstance(sxm_header_dict[key], dict):
+        #         for subkey in sxm_header_dict[key].keys():
+        #             assert ds.attrs[key][subkey] == sxm_header_dict[key][subkey]
+        #     else:
+        #         assert ds.attrs[key] == sxm_header_dict[key]
 
 
 class TestUpSxmFile(TestSxmFile):
@@ -183,7 +185,8 @@ class TestNonSquareSxmFile(TestSxmFile):
 class TestOneDIRSxmFile(TestSxmFile):
     @pytest.fixture(scope="class")
     def sxm_data(self, sxm_pixels):
-        return np.random.random(sxm_pixels[0] * sxm_pixels[1]).astype(np.float32)
+        rng = np.random.default_rng()
+        return rng.random(sxm_pixels[0] * sxm_pixels[1], dtype=np.float32)
 
     @pytest.fixture(scope="class")
     def sxm_header_dict(self, sxm_pixels, sxm_scan_direction, sxm_scan_range):
@@ -259,7 +262,8 @@ class TestOneDIRSxmFile(TestSxmFile):
 class TestIncompleteSxmFile(TestSxmFile):
     @pytest.fixture(scope="class")
     def sxm_data(self, sxm_pixels):
-        data = np.random.random(3 * 2 * sxm_pixels[0] * sxm_pixels[1]).astype(np.float32)
+        rng = np.random.default_rng()
+        data = rng.random(3 * 2 * sxm_pixels[0] * sxm_pixels[1], dtype=np.float32)
         data = data.reshape(3, 2, sxm_pixels[1], sxm_pixels[0])
         data[:, :, 300:, :] = np.nan
         return data.flatten()
