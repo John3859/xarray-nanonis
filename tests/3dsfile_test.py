@@ -71,11 +71,16 @@ class TestStd3dsFile:
         """
 
         n_channels = len(exp_channels)
+        # Calculate total data points: (grid_points * n_channels + 8) * grid_x * grid_y
         n_data = (grid_points * n_channels + 8) * grid_dim[0] * grid_dim[1]
+
+        # Create random data
         rng = np.random.default_rng()
-        data = rng.random(n_data).reshape(grid_dim[0], grid_dim[1], -1)
-        data[:, :, 0] = -1
-        data[:, :, 1] = 1
+        data = rng.random(n_data).reshape(grid_dim[1], grid_dim[0], -1)
+
+        # Set fixed parameters
+        data[:, :, 0] = -1  # Sweep Start
+        data[:, :, 1] = 1  # Sweep End
         return data.flatten()
 
     @pytest.fixture(scope="class")
@@ -163,7 +168,17 @@ class TestStd3dsFile:
         """
         Test of reading data values
         """
-        data = grid_data.reshape(grid_dim[1], grid_dim[0], -1)
+        # Reshape the data and handle incomplete data by filling with NaN
+        expected_shape = (grid_dim[1], grid_dim[0], grid_points * len(exp_channels) + 8)
+        total_elements = np.prod(expected_shape)
+
+        # If the data is incomplete, pad with NaN values
+        if len(grid_data) < total_elements:
+            padded_data = np.full(total_elements, np.nan, dtype=float)
+            padded_data[: len(grid_data)] = grid_data
+            data = padded_data.reshape(expected_shape)
+        else:
+            data = grid_data.reshape(expected_shape)
 
         data_fixed = data[:, :, : len(header_dict["Fixed parameters"])]
         data_param = data[:, :, len(header_dict["Fixed parameters"]) : int(header_dict["# Parameters (4 byte)"])]
@@ -346,3 +361,34 @@ class TestMLS3dsFile(TestStd3dsFile):
             else:
                 bias_coord += list(np.linspace(start, end, points)[1:])
         np.testing.assert_almost_equal(ds["bias"].values, bias_coord)
+
+
+class TestIncomplete3dsFile(TestStd3dsFile):
+    """
+    Test class for incomplete 3DS files.
+    """
+
+    @pytest.fixture(scope="class")
+    def grid_data(self, grid_dim, grid_points, exp_channels):
+        """
+        Fixture to create a grid data
+        """
+        n_channels = len(exp_channels)
+        # Calculate total data points: (grid_points * n_channels + 8) * grid_x * grid_y
+        n_data = (grid_points * n_channels + 8) * grid_dim[0] * grid_dim[1]
+
+        # Create random data
+        rng = np.random.default_rng()
+        data = rng.random(n_data).reshape(grid_dim[1], grid_dim[0], -1)
+
+        # Set fixed parameters
+        data[:, :, 0] = -1  # Sweep Start
+        data[:, :, 1] = 1  # Sweep End
+
+        # Simulate incomplete acquisition by truncating data
+        cutoff_line = grid_dim[0] // 2  # Cut off halfway through the grid
+        # Reshape to keep only data up to the cutoff line
+        truncated_data = data[:cutoff_line, :, :]
+        # Reshape back to original format but with fewer lines
+        data = truncated_data
+        return data.flatten()

@@ -752,9 +752,10 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
         try:
             data = data.reshape(n_y, n_x, exp_size)
         except ValueError:
-            pad_size = exp_size * n_x * n_y - len(data)
-            data = np.pad(data, (0, pad_size), mode="empty")
-            data = data.reshape(n_y, n_x, exp_size)
+            # Pad the array with NaN values for missing data
+            padded_data = np.full(exp_size * n_x * n_y, np.nan, dtype=data.dtype)
+            padded_data[: len(data)] = data
+            data = padded_data.reshape(n_y, n_x, exp_size)
 
         # Move axis so that the order of the axis is ['param + channel', 'y', 'x']
         data = np.moveaxis(data, 2, 0)
