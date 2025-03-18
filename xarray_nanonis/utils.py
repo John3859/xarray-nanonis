@@ -79,7 +79,7 @@ def _get_std_name(name: str) -> str:
     str
         Standard name of the channel.
     """
-    if name == "bias":
+    if name == "bias" or name == "Bias":
         std_name = "Sample bias"
     elif lockin_re.match(name):
         std_name = "dI/dV"

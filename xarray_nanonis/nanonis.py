@@ -1061,7 +1061,7 @@ class Read_NanonisASCIIFile(Read_NanonisFile):
         -------
         pandas.DataFrame
         """
-        data: pd.DataFrame = pd.read_csv(file, sep="\t", index_col=0)
+        data: pd.DataFrame = pd.read_csv(file, sep="\t", index_col=0, dtype=np.float32)
         return data
 
     def _organize_data(self, data_raw: pd.DataFrame) -> pd.DataFrame:
@@ -1101,14 +1101,11 @@ class Read_NanonisASCIIFile(Read_NanonisFile):
         names, units = _separate_name_unit(_channels)
 
         # Sample bias index.
-        bias = (
-            _construct_var(
-                "bias",
-                data.index,
-                standard_name=_get_std_name("bias"),
-                units="V",
-            )
-            / self.divider
+        bias = _construct_var(
+            "bias",
+            data.index / self.divider,
+            standard_name=_get_std_name("bias"),
+            units="V",
         )
         # bias range
         try:
@@ -1128,7 +1125,7 @@ class Read_NanonisASCIIFile(Read_NanonisFile):
                 data[chan],
                 standard_name=_get_std_name(name),
                 units=units[name],
-                attrs=self.header,
+                # attrs=self.header,
             )
 
         # Save spectroscopic data into Xarray.Dataset.
