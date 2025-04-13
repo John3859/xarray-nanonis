@@ -541,6 +541,16 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
         -------
         int
         """
+        # if self.header["Filetype"] == "MLS":
+        #     # If the file is a MLS file, the number of points is the sum of all segments.
+        #     n_point = 0
+        #     for segment in self.header[segment_entry]:
+        #         segment = segment.split(",")
+        #         if n_point == 0:
+        #             n_point = int(segment[4])
+        #         else:
+        #             n_point += int(segment[4]) - 1
+        # else:
         n_point = int(self.header["Points"])
         return n_point
 
@@ -851,16 +861,24 @@ class Read_NanonisBinaryFile(Read_NanonisFile):
                     bias_segment = bias_segment[1:]
                 bias_sweep = np.append(bias_sweep, bias_segment)
                 previous_segment_end = segment_end
+            MLS_points = len(bias_sweep)
+            bias_start = bias_sweep[0]
+            bias_end = bias_sweep[-1]
+            # Handle mismatch of file points and MLS points
+            if n_point != MLS_points:
+                # Pad MLS bias sweep with NaN values
+                padded_bias = np.full(n_point, np.nan, dtype=np.double)
+                padded_bias[: len(bias_sweep)] = bias_sweep
+                bias_sweep = padded_bias
             para_var["bias"] = _construct_var(
                 "bias",
                 bias_sweep,
                 _get_std_name("bias"),
                 "V",
             )
-            bias_start = bias_sweep[0]
-            bias_end = bias_sweep[-1]
         else:
             raise ValueError("Unknown file type {}!".format(self.filetype))
+
         # Separate signals from parameters in raw data.
         data_array: npt.NDArray[np.double] = data[n_para:, :, :]
         # Split signals from different channels apart,
