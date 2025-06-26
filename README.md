@@ -1,22 +1,18 @@
 # xarray-nanonis
 
-[![PyPI version](https://badge.fury.io/py/xarray-nanonis.svg)](https://badge.fury.io/py/xarray-nanonis)
-[![Python](https://img.shields.io/pypi/pyversions/xarray-nanonis.svg)](https://pypi.org/project/xarray-nanonis/)
-[![License](https://img.shields.io/github/license/John3859/xarray-nanonis.svg)](LICENSE)
-
 **Extending xarray to read Nanonis files with coordinates and metadata.**
 
 `xarray-nanonis` is a Python package that integrates Nanonis data files into the xarray ecosystem. It provides support for reading `.sxm`, `.dat`, and `.3ds` files directly into xarray Datasets, complete with proper dimensions, units, coordinate information, and metadata preservation.
 
 ## Features
 
-- **Xarray integration**: Load Nanonis files directly as xarray Datasets using `open_dataset()`;
-- **Full metadata preservation**: Header information is preserved as Dataset attributes;
-- **Proper dimensions and coordinates**: Spatial (x, y) and energy (bias) coordinates with units;
-- **Multi-channel support**: Multiple measurement channels can be retrieved from datasets easily; 
-- **Unit handling**: Automatic parsing and assignment of physical units;
-- **Scan direction support**: Forward/backward scan data for `.sxm` files;
-- **Advanced spectroscopy features**: Support for Multi-Linear Segments (MLS) bias sweeps;
+- **Xarray integration**: Load Nanonis files directly as xarray Datasets using `open_dataset()`
+- **Full metadata preservation**: Header information is preserved as Dataset attributes
+- **Proper dimensions and coordinates**: Spatial (x, y) and energy (bias) coordinates with units
+- **Multi-channel support**: Multiple measurement channels can be retrieved from datasets easily
+- **Unit handling**: Automatic parsing and assignment of physical units
+- **Scan direction support**: Forward/backward scan data for `.sxm` files
+- **Advanced spectroscopy features**: Support for Multi-Linear Segments (MLS) bias sweeps
 
 ## Installation
 
