@@ -7,17 +7,42 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "xarray-nanonis"
+description = "Extending xarray to read Nanonis files with coordinates and metadata"
 authors=[
     {name = "Hao Zhang", email = "zhanghao3859@hotmail.com"},
 ]
+maintainers=[
+    {name = "Hao Zhang", email = "zhanghao3859@hotmail.com"},
+]
+keywords = ["xarray", "nanonis", "scanning probe microscopy", "SPM", "STM", "AFM", "data analysis"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Scientific/Engineering :: Visualization",
+]
 dynamic = ["version"]
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.9"
 dependencies = [
-    "numpy",
-    "xarray",
-    "pandas",
+    "numpy>=1.20.0",
+    "xarray>=0.18.0",
+    "pandas>=1.3.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/John3859/xarray-nanonis"
+Repository = "https://github.com/John3859/xarray-nanonis"
+Documentation = "https://github.com/John3859/xarray-nanonis#readme"
+"Bug Tracker" = "https://github.com/John3859/xarray-nanonis/issues"
 
 [project.entry-points."xarray.backends"]
 nanonis = "xarray_nanonis.NanonisBackendEntrypoint:NanonisBackendEntrypoint"
